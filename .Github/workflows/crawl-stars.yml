@@ -1,0 +1,74 @@
+
+name: Crawl GitHub Stars
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 2 * * *'  
+
+jobs:
+  crawl:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: github_crawler
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d github_crawler"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/github_crawler
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        working-directory: crawler
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Wait for Postgres
+        run: |
+          for i in {1..20}; do
+            pg_isready -h localhost -p 5432 -U postgres && break
+            sleep 2
+          done
+
+      - name: Setup Postgres (create tables)
+        working-directory: crawler
+        run: |
+          python setup_db.py
+
+      - name: Crawl stars
+        working-directory: crawler
+        run: |
+          # For demo run use 1000, for full run use 100000 (watch timeout/rate-limits)
+          python crawl_stars.py --target 1000 --concurrency 6
+
+      - name: Dump DB to SQL files
+        run: |
+          PGPASSWORD=postgres pg_dump -U postgres -h localhost -d github_crawler -t repositories --data-only --column-inserts > crawler/repositories.sql
+          PGPASSWORD=postgres pg_dump -U postgres -h localhost -d github_crawler -t repo_snapshots --data-only --column-inserts > crawler/repo_snapshots.sql
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: github-crawler-dump
+          path: |
+            crawler/repositories.sql
+            crawler/repo_snapshots.sql

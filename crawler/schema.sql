@@ -3,11 +3,11 @@ CREATE TABLE IF NOT EXISTS repositories (
   repo_id TEXT PRIMARY KEY,             
   owner TEXT NOT NULL,
   name TEXT NOT NULL,
-  full_name TEXT NOT NULL UNIQUE,      
+  full_name TEXT NOT NULL UNIQUE,       
   url TEXT,
   description TEXT,
   language TEXT,
-  stars BIGINT,                        
+  stars BIGINT,                         
   forks BIGINT,
   watchers BIGINT,
   open_issues_count INTEGER,
@@ -30,3 +30,9 @@ CREATE TABLE IF NOT EXISTS repo_snapshots (
 );
 
 CREATE INDEX IF NOT EXISTS idx_repo_snapshots_repo_time ON repo_snapshots(repo_id, snapshot_time DESC);
+
+
+CREATE TABLE IF NOT EXISTS discovery_seeds (
+  full_name TEXT PRIMARY KEY,
+  added_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
